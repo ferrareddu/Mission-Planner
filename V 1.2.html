@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mission Planner</title>
+  <!-- Librerie per importazione file -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <!-- Google Font: Source Sans 3 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root{ --header-h:50px; --row-h:32px; --sidebar-bg: #344955; --sidebar-text: #fff; --input-bg: #2c3e50; --yellow-status: #fff176; --ticker-h: 25px;}
+    body{margin:0;font-family:'Source Sans 3', sans-serif;background:#f0f2f5;overflow:hidden; font-size: 16px; font-weight: 600;}
+    header{position:fixed;top:0;left:0;right:0;height:var(--header-h);display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:21px;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.1);z-index:20;padding:0 15px; transition: top 0.3s ease-in-out;}
+    #header-left, #header-center, #header-right-container {display:flex;align-items:center;gap:15px;}
+    #header-left {flex:1;justify-content:flex-start;}
+    #header-center {flex:1.5;justify-content:center;}
+    #header-right-container {flex:1;justify-content:flex-end;}
+    #clock{font-size:18px;font-weight:600;color:#000; min-width: 140px; text-align: right;}
+    .header-button, #gotoNextBtn, #manage-icao-btn {font-size:15px;padding:6px 12px;background-color:#f0f2f5;border:1px solid #dcdcdc;border-radius:6px;cursor:pointer;font-weight:600; transition: background-color 0.2s; display: flex; align-items: center; gap: 5px;}
+    .header-button:hover, #gotoNextBtn:hover, #manage-icao-btn:hover {background-color:#e0e2e5;}
+    #gotoNextBtn, #manage-icao-btn { font-size: 16px; padding: 3px 8px; }
+    #next-day-status { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background-color 0.3s; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.2);}
+    .status-ok { background-color: #4caf50; }
+    .status-warning { background-color: #f44336; }
+    .status-neutral { background-color: #bdbdbd; }
+    #save-status { font-size: 12px; font-weight: 600; transition: color 0.5s; width: 140px; text-align: right; }
+    .status-saving { color: #c49102; }
+    .status-saved { color: #2e7d32; }
+    #search-container input{padding:6px 10px; border-radius:6px; border:1px solid #dcdcdc; font-family: 'Source Sans 3', sans-serif; font-size: 15px;}
+    .content{position:fixed;top:var(--header-h);bottom:0;left:0;right:18%;display:flex;overflow-y:auto; transition: top 0.3s ease-in-out;}
+    .labels{width:12%;min-width:140px;background:var(--sidebar-bg);color:var(--sidebar-text);flex-shrink:0;position: sticky;left: 0;z-index: 10; padding-top: 10px;}
+    .main{flex:1;display:flex; padding-top: 10px;}
+    .sidebar.right{position:fixed;top:var(--header-h);bottom:0;right:0;width:18%;background:var(--sidebar-bg);color:var(--sidebar-text);border-left:2px solid #ccc;overflow-y:auto; display: flex; flex-direction: column; transition: top 0.3s ease-in-out;}
+    .missions{display:grid;grid-auto-flow:column;grid-auto-columns:200px;gap:15px;height:max-content;overflow-x:auto;padding:0 10px; scroll-behavior: smooth; align-items: start;}
+    .mission{display:flex;flex-direction:column;background:#fff;border:1px solid var(--sidebar-bg);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,.1); transition: box-shadow 0.2s, border-color 0.2s;}
+    .mission.editing { border-color: #007bff; box-shadow: 0 0 0 3px #007bff; }
+    .mission.highlighted .cell { animation: highlight-flash-cell 1.5s ease-out; }
+    @keyframes highlight-flash-cell { 0%, 50% { background-color: #fffde7; } }
+    .cell{display:flex;align-items:center;justify-content:center;height:var(--row-h);padding:0 8px;font-size:15px;box-sizing:border-box;overflow:hidden;transition:background-color .3s; line-height: 1.2; text-align: center; position: relative;}
+    .cell:not(.cell-label) {border-bottom:1px solid #ddd;}
+    .cell-label, .sidebar.right .cell{justify-content:flex-start; text-align: left;}
+    .labels .cell-label { background-color: var(--sidebar-bg) !important; color: var(--sidebar-text) !important; }
+    .row-label-container {display:flex;justify-content:space-between;align-items:center;width:100%;}
+    #manage-icao-btn {padding:2px; width:20px; height:20px; background: #556c7a;}
+    .controls{display:flex;align-items:center;justify-content:space-between;height:var(--row-h);padding:2px 6px; box-sizing:border-box;}
+    .controls button, .note-actions button, #close-modal-btn {background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:4px;transition:background-color 0.2s, opacity 0.2s; position: relative;}
+    .controls button svg { flex-shrink: 0; }
+    .controls button:disabled { cursor: not-allowed; opacity: 0.4; }
+    .controls button:hover:not(:disabled), .note-actions button:hover, #close-modal-btn:hover { background-color: #f0f2f5; }
+    .controls .note-count { font-size: 11px; background-color: #4caf50; color: white; border-radius: 8px; padding: 2px 6px; line-height: 1; font-weight: 700; margin-left: 5px; }
+    .row-input{display:flex;gap:4px;width:60%}
+    .row-input input,.row-input select{flex:1;width:100%;padding:4px 6px;border:1px solid #5e798d;border-radius:4px;font-size:14px;height:calc(var(--row-h) - 8px);box-sizing:border-box; background: var(--input-bg); color: var(--sidebar-text); font-weight: 600;}
+    
+    input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+    .sidebar.right input[type="date"]::-webkit-calendar-picker-indicator, .sidebar.right input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer;}
+
+    .save-main{display:block;margin:12px auto;width:80%;padding:8px;background:#4caf50;color:#fff;border:none;border-radius:6px;font-size:15px;cursor:pointer;text-align:center}
+    .airport-block-wrapper { transition: background-color 0.2s; }
+    .airport-block-wrapper.dragging { opacity: 0.4; }
+    .airport-block-wrapper.drag-over { outline: 2px dashed #007bff; outline-offset: -2px; }
+    .drag-handle { cursor: grab; color: #9e9e9e; padding-right: 5px; }
+    .drag-handle:active { cursor: grabbing; }
+    .airport-controls{display:flex;gap:4px;justify-content:flex-start;align-items:center;height:var(--row-h);border-bottom:1px solid #ddd;padding:0 6px;box-sizing:border-box;}
+    .airport-controls button{font-size:16px}
+    .airport-section{display:flex;flex-direction:column}
+    .airport-row{border-bottom:1px solid #e0e0e0;}
+    .airport-section input, .airport-section select { text-align: center; }
+    .cell-content{display:flex;justify-content:center;align-items:center;width:100%;}
+    .proximity-warning{font-size:10px;font-weight:700;margin-left:4px;}
+    .hidden{display:none!important}
+    #toast-container{position:fixed;bottom:10px;right:10px;z-index:1000;display:flex;flex-direction:column;gap:5px;}
+    .toast{background-color:#28a745;color:white;padding:10px 15px;border-radius:5px;box-shadow:0 2px 10px rgba(0,0,0,.2);opacity:0;transform:translateX(100%);animation:slideInFadeOut 3s forwards;}
+    @keyframes slideInFadeOut{10%{opacity:1;transform:translateX(0);}90%{opacity:1;transform:translateX(0);}100%{opacity:0;transform:translateX(100%);}}
+    .bg-green{background-color:#81c784}.bg-yellow{background-color: var(--yellow-status); color: #000;}.bg-red{background-color:#e57373}.bg-white{background-color:#ffffff}
+    .bg-blue{background-color:var(--sidebar-bg)}
+    #notes-overlay, #icao-modal-overlay, #word-template-modal-overlay, #comments-modal-overlay, #destination-notes-modal-overlay, #reminder-modal-overlay {position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:2000;display:flex;justify-content:center;align-items:center;}
+    #notes-modal, #icao-modal, #word-template-modal, #comments-modal, #destination-notes-modal, #reminder-modal {background:#fff;width:600px;max-width:90%;padding:20px;border-radius:8px;box-shadow:0 5px 15px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:15px; max-height: 90vh;}
+    #icao-modal, #destination-notes-modal, #reminder-modal {width: 450px;}
+    #word-template-modal { width: 90%; }
+    #notes-header, #icao-header, #word-template-header, #comments-header, #destination-notes-header, #reminder-header {display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:10px;}
+    #notes-header h2, #icao-header h2, #word-template-header h2, #comments-header h2, #destination-notes-header h2, #reminder-header h2 {margin:0;font-size:20px;}
+    #reminder-header h2 { color: #f44336; }
+    #manage-lists-form, #add-note-form{display:flex;gap:10px;}
+    #add-note-form{padding-top:15px; border-top:1px solid #eee;}
+    #manage-lists-form input, #add-note-form input, #add-note-form select {flex:1;padding:8px;border:1px solid #ccc;border-radius:4px; font-size: 15px;}
+    #add-note-form select { flex: 0.5; }
+    #manage-lists-form button, #add-note-form button{padding:8px 12px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+    .notes-modal-section, #icao-list-container{padding-bottom:15px;border-bottom:1px solid #eee;}
+    #existing-lists, #icao-code-list, #destination-notes-list {max-height: 40vh; overflow-y: auto; list-style:none; padding:0; margin-top: 10px;}
+    #existing-lists li, #icao-code-list li {display:flex;justify-content:space-between;align-items:center;padding: 8px 4px; font-size: 16px; border-bottom: 1px solid #eee;}
+    #destination-notes-list .note-group h4 { font-size: 16px; font-weight: 700; color: #333; background-color: #f0f2f5; padding: 5px 8px; margin-top: 10px; border-radius: 4px; border-bottom: 2px solid #e0e0e0;}
+    #destination-notes-list .note-group:first-child h4 { margin-top: 0; }
+    #destination-notes-list .note-group ul { list-style: none; padding-left: 10px; margin: 0;}
+    #destination-notes-list .note-group li { font-size: 15px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    #destination-notes-list .note-group li:last-child { border-bottom: none; }
+    .notes-container {display:flex; gap: 20px; overflow-y: auto;}
+    .notes-section{flex:1;}
+    .notes-list{list-style:none;padding:0;margin:0;}
+    .notes-list-group {margin-bottom:15px;}
+    .notes-list-group h4 {margin:0 0 5px; font-size: 16px; color: #333; border-bottom: 1px solid #f0f0f0; padding-bottom: 3px;}
+    .notes-list li{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:16px;}
+    .notes-list li:last-child{border:none;}
+    .note-text{flex-grow:1;}
+    .note-list-name { font-size: 12px; color: #fff; background-color: var(--sidebar-bg); padding: 2px 6px; border-radius: 4px; }
+    #past-notes-container .note-text{text-decoration:line-through;color:#888;}
+    #add-note-form select {background-color:white;}
+    .dropdown { position: relative; display: inline-block; }
+    .dropdown-content { display: none; position: absolute; background-color: #f9f9f9; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 100; border-radius: 6px; }
+    .dropdown-content button { width: 100%; text-align: left; padding: 10px 12px; color: #000; }
+    .dropdown:hover .dropdown-content { display: block; }
+    .header-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .header-button:disabled:hover { background-color: #f0f2f5; }
+    .comment-icon, .add-comment-btn { cursor: pointer; margin-left: 5px; color: #aaa; }
+    .add-comment-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity 0.2s; }
+    .cell:hover .add-comment-btn { opacity: 1; }
+    .comment-icon.has-comments { color: #007bff; }
+    #comments-list { max-height: 40vh; overflow-y: auto; list-style: none; padding: 0;}
+    #comments-list li { border-bottom: 1px solid #eee; padding: 10px 0; display:flex; justify-content: space-between; align-items: flex-start;}
+    #comments-list li:last-child { border-bottom: none; }
+    .comment-content { flex-grow: 1; }
+    #comments-list .comment-author { font-weight: 700; color: #333; }
+    #comments-list .comment-meta { font-size: 12px; color: #888; margin-left: 8px;}
+    #comments-list .comment-actions { display:flex; gap: 4px; }
+    #add-comment-form { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+    #add-comment-form input, #add-comment-form textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px;}
+    .comment-count { font-size: 10px; background-color: #f44336; color: white; border-radius: 50%; padding: 1px 4px; line-height: 1; position: absolute; top: 0; right: 0; transform: translate(40%, -40%); font-weight: 700; }
+    #comments-modal .comment-group-header, #destination-notes-list .comment-group-header { font-size: 16px; font-weight: 700; color: #333; background-color: #f0f2f5; padding: 5px 8px; margin-top: 10px; border-radius: 4px; border-bottom: 2px solid #e0e0e0; }
+    #comments-modal .comment-group-header:first-child, #destination-notes-list .comment-group-header:first-child { margin-top: 0; }
+    #comments-list textarea { width: 100%; box-sizing: border-box; font-family: 'Source Sans 3', sans-serif; font-size: 16px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+    
+    /* Post-it Section Styles */
+    #post-it-section { padding: 10px; border-top: 2px solid #ccc; margin-top: auto; background: var(--sidebar-bg); }
+    #post-it-section h3 { margin-top: 0; text-align: center; font-size: 16px; }
+    #add-post-it-form { display: flex; flex-direction: column; gap: 8px; }
+    #add-post-it-form textarea { width: 100%; box-sizing: border-box; background: var(--input-bg); color: var(--sidebar-text); border: 1px solid #5e798d; border-radius: 4px; padding: 6px; font-family: 'Source Sans 3', sans-serif; font-size: 14px; }
+    #add-post-it-form input[type="datetime-local"] { width: 100%; box-sizing: border-box; background: var(--input-bg); color: var(--sidebar-text); border: 1px solid #5e798d; border-radius: 4px; padding: 5px; font-family: 'Source Sans 3', sans-serif;}
+    #post-it-list-container { max-height: 250px; overflow-y: auto; margin-top: 10px; }
+    #post-it-list { list-style: none; padding: 0; margin: 0; }
+    .post-it-item { background: #4a6572; padding: 8px; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+    .post-it-item.completed { background: #2b3a42; opacity: 0.7; }
+    .post-it-item.completed .post-it-text { text-decoration: line-through; }
+    .post-it-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .post-it-text { flex-grow: 1; word-break: break-word; }
+    .post-it-reminder { font-size: 11px; color: #a9c2d0; margin-top: 4px; }
+    .post-it-controls { display: flex; gap: 5px; margin-top: 8px; }
+    .post-it-controls button { background: #5e798d; color: white; border: none; border-radius: 4px; padding: 3px 6px; font-size: 12px; cursor: pointer; }
+    .post-it-controls button.complete-btn { background: #4caf50; }
+    #reminder-modal .modal-content { font-size: 18px; text-align: center; padding: 15px 0; }
+    #reminder-modal .modal-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+    /* News Ticker Styles */
+    #news-ticker-container { position: fixed; top: 0; left: 0; width: 100%; height: var(--ticker-h); background-color: #f44336; color: white; z-index: 30; overflow: hidden; display: flex; align-items: center; font-weight: 600; }
+    #news-ticker-text { white-space: nowrap; display: inline-block; animation-name: scroll-ticker; animation-timing-function: linear; animation-iteration-count: infinite; }
+    @keyframes scroll-ticker { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+    body.ticker-active header { top: var(--ticker-h); }
+    body.ticker-active .content, body.ticker-active .sidebar.right { top: calc(var(--header-h) + var(--ticker-h)); }
+  </style>
+</head>
+<body>
+  <div id="news-ticker-container" class="hidden"><span id="news-ticker-text"></span></div>
+  <header>
+    <div id="header-left">
+<button id="refreshBtn" class="header-button" title="Aggiorna Dati">
+    <!-- L'icona SVG per il refresh verrà inserita da JS -->
+</button>
+      <div id="next-day-status" title="Stato Missioni Domani"></div>
+      <button id="ipad-check-btn" class="header-button" title="iPad Pronti"></button>
+      <div class="dropdown"><button class="header-button">Azioni</button><div class="dropdown-content"><button id="exportBtn" class="header-button">Esporta Passate</button><button id="backupBtn" class="header-button">Crea Backup</button><button id="importBtn" class="header-button">Importa Backup</button><button id="cleanBtn" class="header-button">Pulisci Tabella</button><button id="importExcelBtn" class="header-button" disabled>Importa da Excel</button><button id="importWordBtn" class="header-button" disabled>Importa da Word</button><button id="createWordTemplateBtn" class="header-button" disabled>Crea Template Word</button><button id="toggleTickerBtn" class="header-button"></button><button id="editTickerBtn" class="header-button">Modifica Messaggio Scorrimento</button></div></div>
+    </div>
+    <div id="header-center"><button id="gotoNextBtn" title="Vai alla prossima missione"></button><span>Mission Planner</span><button id="notesBtn" class="header-button">Note</button></div>
+    <div id="header-right-container"><div id="search-container"><input type="text" id="searchInput" placeholder="Cerca..."></div><div id="save-status"></div><div id="clock"></div></div>
+  </header>
+  <div class="sidebar right">
+      <div>
+        <div class="cell" style="justify-content:center;font-weight:600;">Crea missione</div>
+        <div id="inputRows"></div>
+        <button id="saveBtn" class="save-main">Salva missione</button>
+      </div>
+
+      <div id="post-it-section">
+        <h3>Post-it / Consegne</h3>
+        <form id="add-post-it-form">
+            <textarea id="post-it-text-input" placeholder="Nuovo task..." rows="2" required></textarea>
+            <input type="datetime-local" id="post-it-reminder-input" title="Data e ora del promemoria (opzionale)">
+            <button type="submit" class="save-main" style="width: 100%; margin: 0;">Aggiungi Task</button>
+        </form>
+        <div id="post-it-list-container">
+            <ul id="post-it-list"></ul>
+        </div>
+      </div>
+  </div>
+  <div class="content"><div class="labels" id="leftLabels"></div><div class="main"><div id="missionsWrap" class="missions"></div></div></div>
+  <div id="toast-container"></div>
+  <div id="notes-overlay" class="hidden"><div id="notes-modal"><div id="notes-header"><h2>Note</h2><button id="close-modal-btn"></button></div><div class="notes-modal-section"><h3>Gestisci Liste</h3><div id="manage-lists-form"><input type="text" id="list-input" placeholder="Crea nuova lista..."><button id="add-list-btn">+</button></div><ul id="existing-lists" class="notes-list"></ul></div><div id="add-note-form"><select id="note-list-select"></select><input type="text" id="note-input" placeholder="Scrivi una nuova nota..."><button id="add-note-btn">Aggiungi</button></div><div class="notes-container"><div id="active-notes-container" class="notes-section"><h3>Note Attive</h3></div><div id="past-notes-container" class="notes-section"><h3>Note Passate</h3></div></div></div></div>
+  <div id="icao-modal-overlay" class="hidden"><div id="icao-modal"><div id="icao-header"><h2>Gestisci ICAO</h2><button id="close-icao-modal-btn"></button></div><div id="icao-list-container"><ul id="icao-code-list"></ul></div></div></div>
+  
+  <div id="comments-modal-overlay" class="hidden">
+    <div id="comments-modal">
+      <div id="comments-header">
+        <h2 id="comments-modal-title">Commenti</h2>
+        <button id="close-comments-modal-btn"></button>
+      </div>
+      <ul id="comments-list"></ul>
+      <form id="add-comment-form">
+        <input type="text" id="comment-author-input" placeholder="Il tuo nome..." required>
+        <textarea id="comment-text-input" placeholder="Scrivi un commento..." rows="3" required></textarea>
+        <button type="submit" class="save-main">Aggiungi Commento</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="destination-notes-modal-overlay" class="hidden">
+    <div id="destination-notes-modal">
+      <div id="destination-notes-header">
+        <h2 id="destination-notes-title"></h2>
+        <button id="close-destination-notes-btn"></button>
+      </div>
+      <div id="destination-notes-list"></div>
+    </div>
+  </div>
+  
+  <div id="reminder-modal-overlay" class="hidden">
+      <div id="reminder-modal">
+          <div id="reminder-header"><h2>PROMEMORIA</h2></div>
+          <div class="modal-content" id="reminder-modal-text"></div>
+          <div class="modal-actions">
+              <button id="reminder-complete-btn" class="save-main" style="background-color: #4caf50;">Completato</button>
+              <select id="reminder-snooze-select" class="header-button">
+                  <option value="15">Rimanda di 15 min</option>
+                  <option value="60">Rimanda di 1 ora</option>
+                  <option value="1440">Rimanda di 1 giorno</option>
+              </select>
+              <button id="reminder-snooze-btn" class="save-main" style="background-color: #ff9800;">Rimanda</button>
+              <button id="reminder-close-btn" class="save-main" style="background-color: #9e9e9e;">Chiudi</button>
+          </div>
+      </div>
+  </div>
+
+<!-- Incolla questo alla fine del tuo body, al posto del vecchio <script> -->
+<script>
+    // -------------------------------------------------------------------
+    // PASSO FONDAMENTALE: Incolla qui la URL della tua Web App Google
+    // -------------------------------------------------------------------
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxeeKD4QxPkmPRU3_nnOvFo7rkjO5cZSiWUsmlbZ0PUqkeGPofkALlxt52WWapAXxgrXg/exec";
+    // -------------------------------------------------------------------
+
+    // Lo stato iniziale è vuoto. Verrà popolato da Google Sheets.
+    const AppState = { missions: [], notesData: { lists: [], notes: [] }, icaoCodes: [], iPadCheck: null, postItTasks: [], ticker: { text: 'Caricamento...', enabled: false }, editingMissionId: null, searchFilter: '', draggedItem: null, currentCommentContext: null, editingCommentId: null, activeReminderTaskId: null, editingPostItId: null };
+    
+    // Timestamp per la sincronizzazione intelligente
+    let localTimestamp = null;
+
+    // #region ----- LOGICA DI CARICAMENTO E SALVATAGGIO DATI -----
+    
+    function loadDataFromGoogle(force = false) {
+      if (!force) {
+          showToast("Dati aggiornati in background!", "success");
+      } else {
+          showToast("Caricamento dati...", 'warning');
+      }
+      document.getElementById('refreshBtn').disabled = true;
+      fetch(GOOGLE_SCRIPT_URL)
+        .then(res => {
+          if (!res.ok) throw new Error(`Errore di rete: ${res.statusText}`);
+          return res.json();
+        })
+        .then(serverState => {
+          console.log("Dati completi ricevuti da Google Sheets:", serverState);
+          localTimestamp = new Date().toISOString(); // Aggiorniamo il timestamp locale dopo il caricamento completo
+          Object.assign(AppState, serverState);
+          
+          fullRender();
+          if(force) showToast("Dati caricati!");
+        })
+        .catch(err => {
+          console.error("Errore nel caricamento dati:", err);
+          showToast(`Errore di caricamento: ${err.message}`, 'warning');
+        })
+        .finally(() => {
+           document.getElementById('refreshBtn').disabled = false;
+        });
+    }
+
+    function checkForUpdates() {
+      console.log("Controllo aggiornamenti...");
+      fetch(`${GOOGLE_SCRIPT_URL}?action=getTimestamp`)
+        .then(res => res.json())
+        .then(data => {
+          const serverTimestamp = data.timestamp;
+          if (serverTimestamp && serverTimestamp !== localTimestamp) {
+            console.log("Nuova versione trovata! Scarico i dati...");
+            // Aggiorna subito il timestamp locale per evitare chiamate multiple
+            // mentre i dati sono in caricamento.
+            localTimestamp = serverTimestamp; 
+            loadDataFromGoogle(false); // Carica i dati in background
+          } else {
+            console.log("Nessun aggiornamento.");
+          }
+        })
+        .catch(err => console.error("Errore nel controllo aggiornamenti:", err));
+    }
+
+    function save() {
+      updateSaveStatus('saving');
+      // Crea una copia "pulita" di AppState da inviare, senza i campi di stato temporanei
+      const stateToSave = {
+        missions: AppState.missions,
+        notesData: AppState.notesData,
+        icaoCodes: AppState.icaoCodes,
+        postItTasks: AppState.postItTasks,
+        iPadCheck: AppState.iPadCheck,
+        ticker: AppState.ticker,
+      };
+
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(stateToSave)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          updateSaveStatus('saved');
+          // Aggiorna il timestamp locale con quello appena generato dal server
+          localTimestamp = data.timestamp; 
+        } else {
+          updateSaveStatus('saved');
+          console.error('Errore dal server di Google:', data.message);
+          showToast('Errore nel salvataggio!', 'warning');
+        }
+      })
+      .catch(err => {
+        updateSaveStatus('saved');
+        console.error("Errore di rete nel salvataggio:", err);
+        showToast(`Errore di rete! ${err.message}`, 'warning');
+      });
+    }
+
+    function fullRender() {
+        sortMissionsChronologically();
+        render();
+        renderTicker();
+        renderIPadCheckButton();
+        renderIcaoDatalist();
+        renderNotes();
+        checkNextDayStatus();
+    }
+    
+    // #endregion
+
+    const fields=["Mix EATC n°","Protocollo n°","Richiesta ATOC","Data","Callsign","Destinazione","Mix folder","Diplo Request","Mod. Sorvolo","Chg. Diplo req.","SAFOPS","MEAT","RESIA"];
+    const airports=["Aeroporto","Data","Handling Request","Handling (PPR) n°","Handling Chg.","Fuel Request","Fuel Request chg.","Crew list","Crew list chg."];
+    const chgOptions=Array.from({length:11},(_,i)=>`Chg. ${String(i).padStart(2,'0')}`);
+    const dropdowns={2:["","Da inviare","Inviata","N/A"],6:["","Non ricevuta","Ricevuta","N/A"],7:["","Da inviare","Inviata","Ricevuta","N/A"],8:["","Da inviare","Inviata","N/A"],9:["",...chgOptions],11:["","Red","Green"],12:["","Da fare","Caricata"]};
+    const colorMap={2:{"Da inviare":"bg-yellow","Inviata":"bg-green"},6:{"Non ricevuta":"bg-red","Ricevuta":"bg-green"},7:{"Da inviare":"bg-red","Inviata":"bg-yellow","Ricevuta":"bg-green"},8:{"Da inviare":"bg-red","Inviata":"bg-green"},11:{"Red":"bg-red","Green":"bg-green"},12:{"Da fare":"bg-red","Caricata":"bg-green"}};
+    const airportDropdowns={2:["","Da inviare","Inviata","Ricevuta","N/A"],4:["",...chgOptions],5:["","Da inviare","Inviata","Ricevuta","N/A"],6:["",...chgOptions],7:["","Da inviare","Inviata","N/A"],8:["",...chgOptions]};
+    const airportColorMap={2:{"Da inviare":"bg-red","Inviata":"bg-yellow","Ricevuta":"bg-green"},5:{"Da inviare":"bg-red","Inviata":"bg-yellow","Ricevuta":"bg-green"},7:{"Da inviare":"bg-red","Inviata":"bg-green"}};
+    
+    const redValues=new Set();Object.values(colorMap).forEach(map=>{for(const key in map){if(map[key]==='bg-red')redValues.add(key)}});Object.values(airportColorMap).forEach(map=>{for(const key in map){if(map[key]==='bg-red')redValues.add(key)}});
+    
+    const ICONS={
+        alarm: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="orange" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
+        comment: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
+        comments: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>`,
+        addComment: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007bff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="12" y1="9" x2="12" y2="15"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>`,
+        ipadCheck:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,edit:`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`,trash:`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`,save:`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`,cancel:`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,check:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,plus:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,goto:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>`,close:`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,dragHandle:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle><circle cx="5" cy="5" r="1"></circle><circle cx="5" cy="12" r="1"></circle><circle cx="5" cy="19" r="1"></circle></svg>`,settings:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82V15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V15z"></path></svg>`,
+        archive: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e57373" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`,
+        restore: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`,
+        destinationNotes: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>`,
+        refresh: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`
+    };
+    
+    // Il resto del tuo codice (funzioni da sortMissionsChronologically in poi)
+    // è stato controllato ed è corretto con la nuova logica.
+    // Non sono necessarie altre modifiche.
+
+    function sortMissionsChronologically() {
+        if (!AppState.missions) AppState.missions = [];
+        AppState.missions.sort((a, b) => {
+            const dateA = parseDate(a.f3);
+            const dateB = parseDate(b.f3);
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            return dateA - dateB;
+        });
+    }
+
+    const getTomorrowDateString = () => { const t = new Date(); t.setDate(t.getDate() + 1); return t.toISOString().slice(0, 10); };
+    
+    const renderIPadCheckButton = () => {
+        const tomorrowStr = getTomorrowDateString();
+        if (!AppState.iPadCheck || AppState.iPadCheck.date !== tomorrowStr) {
+            AppState.iPadCheck = { date: tomorrowStr, checked: false };
+            save();
+        }
+        const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+        const hasMissionsTomorrow = AppState.missions.some(m => {
+            const missionDate = parseDate(m.f3);
+            return missionDate && missionDate.getTime() === tomorrow.getTime() && !m.isCancelled;
+        });
+        const btn = document.getElementById('ipad-check-btn');
+        btn.disabled = !hasMissionsTomorrow;
+        if (AppState.iPadCheck.checked) {
+            btn.classList.add('status-ok');
+        } else {
+            btn.classList.remove('status-ok');
+        }
+    };
+    const toggleIPadCheck = () => {
+        const tomorrowStr = getTomorrowDateString();
+        if (!AppState.iPadCheck || AppState.iPadCheck.date !== tomorrowStr) {
+            AppState.iPadCheck = { date: tomorrowStr, checked: false };
+        }
+        AppState.iPadCheck.checked = !AppState.iPadCheck.checked;
+        save();
+        renderIPadCheckButton();
+        checkNextDayStatus();
+    };
+
+    const parseDate=s=>{if(!s||typeof s!=='string')return null;const[d,m,y]=s.split('/');if(!d||!m||!y)return null;return new Date(y,m-1,d)};
+    const fmt=s=>{const d=parseDate(s);return d?d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}):''};
+    const fmtDateTime=s=>{if (!s) return ''; const d=new Date(s);return d?d.toLocaleString('it-IT',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace('.',''):''};
+    function getColorClass(map,fieldIndex,value){if(value===''||value===null||value===undefined)return'bg-white';return(map[fieldIndex]&&map[fieldIndex][value])?map[fieldIndex][value]:'bg-white'}
+    function showToast(message, type = 'success'){const c=document.getElementById('toast-container'),t=document.createElement('div');t.className='toast';if(type==='warning')t.style.backgroundColor='#f57f17';if(type==='success')t.style.backgroundColor='#28a745';t.textContent=message;c.appendChild(t);setTimeout(()=>t.remove(),3e3)}
+    
+    function getProximityWarning(dateStr){
+        const targetDate=parseDate(dateStr);
+        if(!targetDate)return'';
+        const today=new Date();today.setHours(0,0,0,0);
+        const diffTime=targetDate.getTime()-today.getTime();
+        const diffDays=Math.ceil(diffTime/(1e3*60*60*24));
+        if(diffDays>=0&&diffDays<=7)return`<span class="proximity-warning" title="Meno di 7 giorni">${ICONS.alarm}</span>`;
+        if(diffDays>7)return`<span class="proximity-warning" title="Mancano ${diffDays-7} gg. alla settimana critica"></span>`;
+        return`<span class="proximity-warning" title="Scaduto">${ICONS.alarm}</span>`
+    }
+    
+    function createNewAirportBlock(){return{rows:airports.map((_,i)=>{const defaultValue=[2,5,7].includes(i)?'Da inviare':'';return{value:defaultValue,editing:true,saved:false}})}}
+    function updateClock(){const now=new Date();const options={weekday:'short',day:'2-digit',month:'short'};const datePart=now.toLocaleDateString('it-IT',options).replace('.','');const timePart=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;document.getElementById('clock').textContent=`${datePart} ${timePart}`}
+    function updateSaveStatus(status){const el=document.getElementById('save-status');if(status==='saving'){el.textContent='Salvataggio...';el.className='status-saving'}else{el.textContent='Dati salvati';el.className='status-saved'}}
+    
+    function checkNextDayStatus(){
+        if (!AppState.missions) return;
+        renderIPadCheckButton();
+        const indicator=document.getElementById('next-day-status');
+        const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);tomorrow.setHours(0,0,0,0);
+        const tomorrowMissions=AppState.missions.filter(m=>{
+            const missionDate=parseDate(m.f3);
+            return missionDate && missionDate.getTime()===tomorrow.getTime() && !m.isCancelled;
+        });
+        indicator.className='next-day-status';
+
+        if(tomorrowMissions.length===0){
+            indicator.innerHTML=ICONS.check;indicator.classList.add('status-neutral');return
+        }
+
+        let hasRedFlag=false;
+        for(const mission of tomorrowMissions){for(let i=0;i<fields.length;i++){if(redValues.has(mission['f'+i])){hasRedFlag=true;break}}if(hasRedFlag)break;if(mission.airportBlocks){for(const block of mission.airportBlocks){for(const row of block.rows){if(redValues.has(row.value)){hasRedFlag=true;break}}if(hasRedFlag)break}}}
+
+        const isIPadChecked = AppState.iPadCheck && AppState.iPadCheck.checked;
+        
+        if(hasRedFlag || !isIPadChecked){
+            indicator.innerHTML="!";indicator.classList.add('status-warning');
+        } else {
+            indicator.innerHTML=ICONS.check;indicator.classList.add('status-ok');
+        }
+    }
+
+    function gotoNextMission(){const today=new Date();today.setHours(0,0,0,0);const targetIndex=AppState.missions.findIndex(m=>{const d=parseDate(m.f3);return d&&d>=today&&!m.isCancelled});if(targetIndex===-1){showToast("Nessuna missione futura trovata.");return}const targetCard=document.querySelector(`.mission[data-i="${targetIndex}"]`);if(targetCard){targetCard.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});targetCard.classList.add('highlighted');setTimeout(()=>targetCard.classList.remove('highlighted'),2000)}}
+    
+    function exportPastMissions(){const today=new Date();today.setHours(0,0,0,0);const pastMissions=AppState.missions.filter(m=>{const d=parseDate(m.f3);return d&&d<today});if(pastMissions.length===0){showToast("Nessuna missione da esportare.");return}const htmlTemplate=`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/><title>Archivio Missioni</title><style>${[...document.styleSheets[0].cssRules].map(r=>r.cssText).join('')}</style></head><body><header><div id="header-center">Archivio Missioni (${new Date().toLocaleDateString('it-IT')})</div></header><div class="content"><div class="labels" id="leftLabels"></div><div class="main"><div id="missionsWrap" class="missions"></div></div></div><script>
+    const missionsData=${JSON.stringify(pastMissions)}; const fields=${JSON.stringify(fields)}; const airports=${JSON.stringify(airports)};
+    const parseDate=s=>{if(!s||typeof s!=='string')return null;const[d,m,y]=s.split('/');if(!d||!m||!y)return null;return new Date(y,m-1,d)};
+    const fmt=s=>{const d=parseDate(s);return d?d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}):''};
+    const getColorClass=(map,fieldIndex,value)=>(map[fieldIndex]&&map[fieldIndex][value])?map[fieldIndex][value]:'bg-white';
+    const colorMap=${JSON.stringify(colorMap)}; const airportColorMap=${JSON.stringify(airportColorMap)};
+    function card(m){const c=document.createElement('div');c.className='mission'; if(m.isCancelled){c.style.opacity='0.6';} c.innerHTML+='<div class="cell"></div>';fields.forEach((_,j)=>{const v=m['f'+j]||'';const cell=document.createElement('div');const cellClass = m.isCancelled ? 'bg-red' : getColorClass(colorMap,j,v); cell.className='cell '+cellClass;if([3,4,5].includes(j)){cell.style.fontWeight='700'}cell.textContent=j===3?fmt(v):v;c.appendChild(cell)});if(m.airportBlocks)m.airportBlocks.forEach(block=>{c.appendChild(document.createElement('div'));c.innerHTML+='<div class="cell"></div>';block.rows.forEach((r,i)=>{const v=r.value||'';const ph=document.createElement('div');const cellClass = m.isCancelled ? 'bg-red' : getColorClass(airportColorMap,i,v); ph.className='cell airport-row '+cellClass;ph.textContent=i===1?fmt(v):v;c.appendChild(ph)})});return c}
+    const left=document.getElementById('leftLabels');left.innerHTML='<div class="cell cell-label"></div>';fields.forEach((t,i)=>{const style=[3,4,5].includes(i)?'font-weight:700;':'';left.insertAdjacentHTML('beforeend','<div class="cell cell-label" style="'+style+'">'+t+'</div>')});
+    const maxBlocks = missionsData.length > 0 ? Math.max(0, ...missionsData.map(m => m.airportBlocks ? m.airportBlocks.length : 0)) : 0;
+    for(let i=0;i<maxBlocks;i++){left.insertAdjacentHTML('beforeend','<div class="cell cell-label"></div>');airports.forEach(a=>left.insertAdjacentHTML('beforeend','<div class="cell cell-label">'+a+'</div>'))}
+    missionsData.forEach(m=>document.getElementById('missionsWrap').appendChild(card(m)));<\/script></body></html>`;const blob=new Blob([htmlTemplate],{type:'text/html'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`archivio_missioni.html`;link.click();showToast(`${pastMissions.length} missioni esportate.`)}
+    
+    function cleanPastMissions(){const password=prompt("Password:");if(password!=='CNXspacciatori'){alert("Password errata.");return}const today=new Date();today.setHours(0,0,0,0);const originalLength=AppState.missions.length;AppState.missions=AppState.missions.filter(m=>{const d=parseDate(m.f3);return!d||d>=today});const deletedCount=originalLength-AppState.missions.length;if(deletedCount>0){save();fullRender();showToast(`${deletedCount} missioni passate eliminate.`);}else{showToast("Nessuna missione da eliminare.")}}
+    
+    function renderNotes(){const activeContainer=document.getElementById('active-notes-container');const pastContainer=document.getElementById('past-notes-container');const listSelect=document.getElementById('note-list-select');const existingListsUl=document.getElementById('existing-lists');activeContainer.innerHTML='<h3>Note Attive</h3>';pastContainer.innerHTML='<h3>Note Passate</h3>';listSelect.innerHTML='';existingListsUl.innerHTML='';if(!AppState.notesData || !AppState.notesData.lists) return; AppState.notesData.lists.forEach(list=>{listSelect.add(new Option(list.name,list.id));const li=document.createElement('li');li.innerHTML=`<span>${list.name}</span>`;if(list.name!=="Generale"){const deleteBtn=document.createElement('button');deleteBtn.innerHTML=ICONS.trash;deleteBtn.onclick=()=>deleteList(list.id);li.appendChild(deleteBtn)}existingListsUl.appendChild(li);const activeNotes=(AppState.notesData.notes || []).filter(n=>n.listId==list.id&&n.status==='active');const pastNotes=(AppState.notesData.notes || []).filter(n=>n.listId==list.id&&n.status==='completed');if(activeNotes.length>0){const group=document.createElement('div');group.className='notes-list-group';group.innerHTML=`<h4>${list.name}</h4><ul class="notes-list"></ul>`;activeNotes.forEach(note=>group.querySelector('ul').appendChild(createNoteLi(note)));activeContainer.appendChild(group)}if(pastNotes.length>0){const group=document.createElement('div');group.className='notes-list-group';group.innerHTML=`<h4>${list.name}</h4><ul class="notes-list"></ul>`;pastNotes.forEach(note=>group.querySelector('ul').appendChild(createNoteLi(note)));pastContainer.appendChild(group)}})}
+    function createNoteLi(note){const li=document.createElement('li');li.innerHTML=`<span class="note-text">${note.text}</span><div class="note-actions"></div>`;const actions=li.querySelector('.note-actions');if(note.status==='active'){const completeBtn=document.createElement('button');completeBtn.title='Completa';completeBtn.innerHTML=ICONS.check;completeBtn.onclick=()=>completeNote(note.id);actions.appendChild(completeBtn)}const deleteBtn=document.createElement('button');deleteBtn.title='Elimina';deleteBtn.innerHTML=ICONS.trash;deleteBtn.onclick=()=>deleteNote(note.id);actions.appendChild(deleteBtn);return li}
+    function addList(){const input=document.getElementById('list-input');const name=input.value.trim().toUpperCase();if(!name||AppState.notesData.lists.find(l=>l.name===name))return;AppState.notesData.lists.push({id:Date.now(),name:name});save();renderNotes();input.value=''}
+    function addNote(){const textInput=document.getElementById('note-input');const listSelect=document.getElementById('note-list-select');const text=textInput.value.trim();const listId=parseInt(listSelect.value,10);if(!text||!listId)return;if(!AppState.notesData.notes) AppState.notesData.notes = []; AppState.notesData.notes.push({id:Date.now(),listId:listId,text:text,status:'active'});save();renderNotes();textInput.value=''}
+    function completeNote(id){const note=AppState.notesData.notes.find(n=>n.id==id);if(note){note.status='completed';save();renderNotes()}}
+    function deleteNote(id){AppState.notesData.notes=AppState.notesData.notes.filter(n=>n.id!=id);save();renderNotes()}
+    function deleteList(listId){const listToDelete=AppState.notesData.lists.find(l=>l.id==listId);if(!listToDelete||listToDelete.name==="Generale"){alert("La lista 'Generale' non può essere eliminata.");return}if(confirm(`Sei sicuro di voler eliminare la lista "${listToDelete.name}"? TUTTE le note in questa lista verranno cancellate.`)){AppState.notesData.lists=AppState.notesData.lists.filter(l=>l.id!=listId);const originalNotesCount=AppState.notesData.notes.length;AppState.notesData.notes=AppState.notesData.notes.filter(n=>n.listId!=listId);const deletedNotesCount=originalNotesCount-AppState.notesData.notes.length;save();renderNotes();showToast(`Lista "${listToDelete.name}" e ${deletedNotesCount} note eliminate.`)}}
+    function renderIcaoDatalist(){const datalist=document.getElementById('icao-list');if(!datalist)return;datalist.innerHTML='';(AppState.icaoCodes || []).forEach(code=>datalist.insertAdjacentHTML('beforeend',`<option value="${code}"></option>`))}
+    function openIcaoModal(){document.getElementById('icao-modal-overlay').classList.remove('hidden');renderIcaoManagement()}
+    function renderIcaoManagement(){const list=document.getElementById('icao-code-list');list.innerHTML='';(AppState.icaoCodes || []).sort().forEach(code=>{const li=document.createElement('li');li.innerHTML=`<span>${code}</span>`;const delBtn=document.createElement('button');delBtn.innerHTML=ICONS.trash;delBtn.onclick=()=>deleteIcaoCode(code);li.appendChild(delBtn);list.appendChild(li)})}
+    function deleteIcaoCode(code){if(confirm(`Sei sicuro di voler eliminare il codice ICAO "${code}"?`)){AppState.icaoCodes=AppState.icaoCodes.filter(c=>c!==code);save();renderIcaoDatalist();renderIcaoManagement();showToast(`Codice ${code} eliminato.`)}}
+    
+    function getActiveNotesForDestination(destination) {
+        if (!destination || !AppState.notesData || !AppState.notesData.lists || !AppState.notesData.notes) return [];
+        const destinationIcaos = destination.toUpperCase().trim().split('-').filter(Boolean);
+        if (destinationIcaos.length === 0) return [];
+        let allRelevantNotes = [];
+        destinationIcaos.forEach(icao => {
+            const targetList = AppState.notesData.lists.find(list => list.name.toUpperCase().trim() === icao);
+            if (targetList) {
+                const notesInList = AppState.notesData.notes
+                    .filter(note => note.listId == targetList.id && note.status === 'active')
+                    .map(note => ({ ...note, listName: targetList.name })); 
+                allRelevantNotes = allRelevantNotes.concat(notesInList);
+            }
+        });
+        return allRelevantNotes;
+    }
+    
+    function showDestinationNotesModal(notes, destination) {
+        const modal = document.getElementById('destination-notes-modal-overlay');
+        const title = document.getElementById('destination-notes-title');
+        const listContainer = document.getElementById('destination-notes-list');
+
+        title.textContent = `Note per la Missione: ${destination || 'N/A'}`;
+        listContainer.innerHTML = '';
+
+        if (notes.length === 0) {
+            listContainer.innerHTML = '<li>Nessuna nota attiva trovata per le liste associate a questa destinazione.</li>';
+        } else {
+            const groupedNotes = {};
+            notes.forEach(note => {
+                if (!groupedNotes[note.listName]) {
+                    groupedNotes[note.listName] = [];
+                }
+                groupedNotes[note.listName].push(note);
+            });
+            for (const listName in groupedNotes) {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'note-group';
+                const groupTitle = document.createElement('h4');
+                groupTitle.textContent = `Lista: ${listName}`;
+                groupDiv.appendChild(groupTitle);
+                const noteUl = document.createElement('ul');
+                groupedNotes[listName].forEach(note => {
+                    const li = document.createElement('li');
+                    li.textContent = note.text;
+                    noteUl.appendChild(li);
+                });
+                groupDiv.appendChild(noteUl);
+                listContainer.appendChild(groupDiv);
+            }
+        }
+        modal.classList.remove('hidden');
+    }
+
+    function openCommentsModal(missionIndex, context) {
+        AppState.currentCommentContext = { missionIndex, context };
+        const mission = AppState.missions[missionIndex];
+        const modal = document.getElementById('comments-modal-overlay');
+        const title = document.getElementById('comments-modal-title');
+        const commentsList = document.getElementById('comments-list');
+        const addCommentForm = document.getElementById('add-comment-form');
+        addCommentForm.classList.remove('hidden');
+        AppState.editingCommentId = null; 
+        title.textContent = `Commenti per: ${context.field}`;
+        if (context.blockIndex !== null && context.blockIndex !== undefined) {
+            title.textContent += ` (Aeroporto ${context.blockIndex + 1})`;
+        }
+        commentsList.innerHTML = '';
+        const relevantComments = (mission.comments || []).filter(c => 
+            c.context.field === context.field && c.context.blockIndex === context.blockIndex
+        ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        if (relevantComments.length === 0) {
+            commentsList.innerHTML = '<li>Nessun commento per questo campo.</li>';
+        } else {
+            relevantComments.forEach(comment => {
+                const li = document.createElement('li');
+                li.innerHTML = `<div class="comment-content"><div class="comment-author">${comment.author}<span class="comment-meta">${new Date(comment.timestamp).toLocaleString('it-IT')}</span></div><p>${comment.text}</p></div>`;
+                commentsList.appendChild(li);
+            });
+        }
+        document.getElementById('comment-author-input').value = localStorage.getItem('commentAuthor') || '';
+        modal.classList.remove('hidden');
+    }
+
+    function openAllCommentsModal(missionIndex) {
+        const mission = AppState.missions[missionIndex];
+        const modal = document.getElementById('comments-modal-overlay');
+        const title = document.getElementById('comments-modal-title');
+        const commentsList = document.getElementById('comments-list');
+        const addCommentForm = document.getElementById('add-comment-form');
+        addCommentForm.classList.add('hidden');
+        title.textContent = `Tutti i commenti per: ${mission.f4 || 'Missione senza nome'}`;
+        commentsList.innerHTML = '';
+        if (!mission.comments || mission.comments.length === 0) {
+            commentsList.innerHTML = '<li>Nessun commento per questa missione.</li>';
+            modal.classList.remove('hidden');
+            return;
+        }
+        const groupedComments = {};
+        mission.comments.forEach(comment => {
+            let groupKey = comment.context.field;
+            if (comment.context.blockIndex !== null && comment.context.blockIndex !== undefined) {
+                groupKey += ` (Aeroporto ${comment.context.blockIndex + 1})`;
+            }
+            if (!groupedComments[groupKey]) groupedComments[groupKey] = [];
+            groupedComments[groupKey].push(comment);
+        });
+        Object.keys(groupedComments).sort().forEach(groupKey => {
+            const groupHeader = document.createElement('h4');
+            groupHeader.className = 'comment-group-header';
+            groupHeader.textContent = groupKey;
+            commentsList.appendChild(groupHeader);
+            const commentsInGroup = groupedComments[groupKey].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+            commentsInGroup.forEach(comment => {
+                const li = document.createElement('li');
+                const isEditing = AppState.editingCommentId == comment.id;
+                li.innerHTML = `<div class="comment-content"><div class="comment-author">${comment.author}<span class="comment-meta">${new Date(comment.timestamp).toLocaleString('it-IT')}</span></div>${isEditing ? `<textarea id="edit-comment-textarea-${comment.id}" rows="3">${comment.text}</textarea>`: `<p>${comment.text}</p>`}</div><div class="comment-actions">${isEditing ? `<button title="Salva" onclick="saveCommentEdit(${missionIndex}, ${comment.id})">${ICONS.save}</button><button title="Annulla" onclick="cancelCommentEdit(${missionIndex})">${ICONS.cancel}</button>`: `<button title="Modifica" onclick="startEditComment(${missionIndex}, ${comment.id})">${ICONS.edit}</button><button title="Elimina" onclick="deleteComment(${missionIndex}, ${comment.id})">${ICONS.trash}</button>`}</div>`;
+                commentsList.appendChild(li);
+            });
+        });
+        modal.classList.remove('hidden');
+    }
+
+    function startEditComment(missionIndex, commentId) { AppState.editingCommentId = commentId; openAllCommentsModal(missionIndex); }
+    function cancelCommentEdit(missionIndex) { AppState.editingCommentId = null; openAllCommentsModal(missionIndex); }
+
+    function saveCommentEdit(missionIndex, commentId) {
+        const mission = AppState.missions[missionIndex];
+        const comment = mission.comments.find(c => c.id == commentId);
+        const textarea = document.getElementById(`edit-comment-textarea-${commentId}`);
+        if (comment && textarea) {
+            comment.text = textarea.value.trim();
+            AppState.editingCommentId = null;
+            save();
+            render(); 
+            openAllCommentsModal(missionIndex); 
+            showToast('Commento aggiornato.');
+        }
+    }
+
+    function deleteComment(missionIndex, commentId) {
+        if (confirm('Sei sicuro di voler eliminare questo commento?')) {
+            const mission = AppState.missions[missionIndex];
+            mission.comments = mission.comments.filter(c => c.id != commentId);
+            AppState.editingCommentId = null; 
+            save();
+            render(); 
+            openAllCommentsModal(missionIndex); 
+            showToast('Commento eliminato.');
+        }
+    }
+
+    function addComment(event) {
+        event.preventDefault();
+        const { missionIndex, context } = AppState.currentCommentContext;
+        const author = document.getElementById('comment-author-input').value.trim();
+        const text = document.getElementById('comment-text-input').value.trim();
+        if (!author || !text) { alert("Nome e testo del commento sono obbligatori."); return; }
+        const newComment = { id: Date.now(), author: author, text: text, timestamp: new Date().toISOString(), context: context };
+        const mission = AppState.missions[missionIndex];
+        if (!mission.comments) mission.comments = [];
+        mission.comments.push(newComment);
+        localStorage.setItem('commentAuthor', author);
+        save();
+        render();
+        document.getElementById('comments-modal-overlay').classList.add('hidden');
+        document.getElementById('comment-text-input').value = '';
+    }
+
+    function getCommentIcon(mission, context) {
+        if (!mission.comments) return '';
+        const hasComments = mission.comments.some(c => c.context.field === context.field && c.context.blockIndex === context.blockIndex);
+        return hasComments ? `<span class="comment-icon has-comments">${ICONS.comment}</span>` : '';
+    }
+
+    function renderLabels() {
+        const left = document.getElementById('leftLabels');
+        const maxBlocks = AppState.missions.length > 0 ? Math.max(0, ...AppState.missions.map(m => m.airportBlocks ? m.airportBlocks.length : 0)) : 0;
+        left.innerHTML = '<div class="cell cell-label"></div>';
+        fields.forEach((t, i) => { const style = [3, 4, 5].includes(i) ? 'font-weight:700;' : ''; left.insertAdjacentHTML('beforeend', `<div class="cell cell-label" style="${style}">${t}</div>`); });
+        for (let i = 0; i < maxBlocks; i++) { left.insertAdjacentHTML('beforeend', '<div class="cell cell-label"></div>'); airports.forEach(a => left.insertAdjacentHTML('beforeend', `<div class="cell cell-label">${a}</div>`)); }
+        left.insertAdjacentHTML('beforeend', '<div class="cell cell-label"></div>');
+    }
+
+    function render(){
+        renderLabels();
+        const wrap=document.getElementById('missionsWrap');
+        wrap.innerHTML='';
+        const filteredMissions=(AppState.missions || []).filter(m=>(m.f4||'').toLowerCase().includes(AppState.searchFilter)||(m.f5||'').toLowerCase().includes(AppState.searchFilter));
+        filteredMissions.forEach(m=>{const originalIndex=AppState.missions.findIndex(orig=>orig.id===m.id);wrap.appendChild(card(m,originalIndex))});
+        checkNextDayStatus();
+        renderPostItTasks();
+    }
+    
+    function card(m,i){
+        const isEditing=AppState.editingMissionId===i;
+        if(!m.id)m.id=Date.now()+Math.random();if(!m.airportBlocks)m.airportBlocks=[];if(!m.comments)m.comments=[];
+        const c=document.createElement('div');
+        c.className=`mission ${isEditing?'editing':''}`;
+        c.dataset.i=i;
+        const ctrl=document.createElement('div');
+        ctrl.className='controls bg-white';
+        if(isEditing){
+            const saveBtn=document.createElement('button');saveBtn.innerHTML=ICONS.save;saveBtn.onclick=()=>saveMainEdit(i);
+            const cancelBtn=document.createElement('button');cancelBtn.innerHTML=ICONS.cancel;cancelBtn.onclick=()=>cancelMainEdit();
+            ctrl.append(saveBtn,cancelBtn);
+        } else {
+            const leftControls = document.createElement('div');
+            const rightControls = document.createElement('div');
+            leftControls.style.display = 'flex'; leftControls.style.alignItems = 'center'; rightControls.style.display = 'flex';
+            const notesBtn = document.createElement('button');
+            notesBtn.title = "Vedi note per questa destinazione";
+            const relevantNotes = getActiveNotesForDestination(m.f5);
+            notesBtn.innerHTML = ICONS.destinationNotes;
+            if (relevantNotes.length > 0) { notesBtn.innerHTML += `<span class="note-count">${relevantNotes.length}</span>`; }
+            notesBtn.onclick = () => showDestinationNotesModal(relevantNotes, m.f5);
+            notesBtn.disabled = m.isCancelled;
+            leftControls.appendChild(notesBtn);
+            if(m.comments && m.comments.length > 0) {
+                const commentsBtn = document.createElement('button');
+                commentsBtn.title = 'Vedi tutti i commenti';
+                commentsBtn.innerHTML = ICONS.comments + `<span class="comment-count">${m.comments.length}</span>`;
+                commentsBtn.onclick = () => openAllCommentsModal(i);
+                commentsBtn.disabled = m.isCancelled;
+                rightControls.appendChild(commentsBtn);
+            }
+            const toggleCancelBtn = document.createElement('button');
+            if(m.isCancelled) {
+                toggleCancelBtn.title = "Ripristina Missione";
+                toggleCancelBtn.innerHTML = ICONS.restore;
+                toggleCancelBtn.onclick = () => { if(confirm('Sei sicuro di voler ripristinare questa missione?')) { AppState.missions[i].isCancelled = false; save(); render(); showToast('Missione ripristinata.'); } };
+            } else {
+                toggleCancelBtn.title = "Annulla Missione";
+                toggleCancelBtn.innerHTML = ICONS.archive;
+                toggleCancelBtn.onclick = () => { if(confirm('Sei sicuro di voler annullare questa missione? Verrà colorata di rosso e non potrà essere modificata.')) { AppState.missions[i].isCancelled = true; save(); render(); showToast('Missione annullata.'); } };
+            }
+            rightControls.appendChild(toggleCancelBtn);
+            const delBtn=document.createElement('button');
+            delBtn.title = 'Elimina Missione';
+            delBtn.innerHTML=ICONS.trash;
+            delBtn.onclick=()=>{if(confirm('Sei sicuro di voler eliminare DEFINITIVAMENTE la missione?')){AppState.missions.splice(i,1);save();render();showToast('Missione eliminata.')}};
+            delBtn.disabled = m.isCancelled;
+            rightControls.appendChild(delBtn);
+            const editBtn=document.createElement('button');
+            editBtn.title = 'Modifica Missione';
+            editBtn.innerHTML=ICONS.edit;
+            editBtn.onclick=()=>startEdit(i);
+            editBtn.disabled = m.isCancelled;
+            rightControls.appendChild(editBtn);
+            ctrl.append(leftControls, rightControls);
+        }
+        c.appendChild(ctrl);
+        fields.forEach((_,j)=>{
+            const v=m['f'+j]||'';
+            const cellClass = m.isCancelled ? 'bg-red' : getColorClass(colorMap,j,v);
+            const cell=document.createElement('div');
+            cell.className=`cell ${cellClass}`;
+            if([3,4,5].includes(j)){cell.style.fontWeight='700'}
+            if(isEditing){
+                let el;
+                const raw=AppState.missions[i]['f'+j]||'';
+                if(j===3){el=document.createElement('input');el.type='date';el.placeholder='gg/mm/aaaa';if(raw){const[d,m,y]=raw.split('/');el.value=`${y}-${m}-${d}`}}
+                else if(dropdowns[j]){el=document.createElement('select');dropdowns[j].forEach(opt=>el.add(new Option(opt,opt)));el.value=raw;el.onchange=()=>{cell.className='cell';cell.classList.add(m.isCancelled ? 'bg-red' : getColorClass(colorMap,j,el.value))}}
+                else{el=document.createElement('input');el.type='text';el.value=raw;el.style.textAlign='center'}
+                el.dataset.mainInput=j;cell.appendChild(el)
+            } else {
+                const commentIcon=getCommentIcon(m,{field:fields[j],blockIndex:null});
+                const content=j===3?fmt(v):v;
+                cell.innerHTML=`<div class="cell-content"><span>${content}</span><div>${commentIcon}</div></div><span class="add-comment-btn">${ICONS.addComment}</span>`;
+                if(!m.isCancelled) cell.querySelector('.add-comment-btn').onclick=(e)=>{e.stopPropagation();openCommentsModal(i,{field:fields[j],blockIndex:null})};
+            }
+            c.appendChild(cell)
+        });
+        (m.airportBlocks || []).forEach((_,blockIdx)=>{c.appendChild(renderAirportBlockWrapper(m,i,blockIdx))});
+        c.appendChild(renderAirportButtonRow(m,i,(m.airportBlocks || []).length));
+        return c;
+    }
+    
+    function renderAirportBlockWrapper(m,missionIdx,blockIdx){const wrapper=document.createElement('div');wrapper.className='airport-block-wrapper';wrapper.dataset.missionIdx=missionIdx;wrapper.dataset.blockIdx=blockIdx;wrapper.setAttribute('draggable',!m.isCancelled);wrapper.addEventListener('dragstart',handleDragStart);wrapper.addEventListener('dragover',handleDragOver);wrapper.addEventListener('drop',handleDrop);wrapper.addEventListener('dragend',handleDragEnd);wrapper.appendChild(renderAirportButtonRow(m,missionIdx,blockIdx));wrapper.appendChild(renderAirportFieldsRow(m,missionIdx,blockIdx));return wrapper}
+    function renderAirportButtonRow(m,missionIdx,blockIdx){const wrap=document.createElement('div');wrap.className='airport-controls bg-white';const dragHandle=document.createElement('span');dragHandle.className='drag-handle';dragHandle.innerHTML=ICONS.dragHandle;wrap.appendChild(dragHandle);const btnPlus=document.createElement('button');btnPlus.innerHTML=ICONS.plus;btnPlus.onclick=()=>{if(AppState.editingMissionId===missionIdx)cancelMainEdit();if(blockIdx<m.airportBlocks.length){m.airportBlocks.splice(blockIdx,0,createNewAirportBlock())}else{m.airportBlocks.push(createNewAirportBlock())}save();render()};wrap.appendChild(btnPlus);if(blockIdx<m.airportBlocks.length){const btnEdit=document.createElement('button');btnEdit.innerHTML=ICONS.edit;btnEdit.title='Modifica';btnEdit.onclick=()=>{if(AppState.editingMissionId===missionIdx)cancelMainEdit();m.airportBlocks[blockIdx].rows.forEach(r=>r.editing=true);save();render()};wrap.appendChild(btnEdit);const btnSave=document.createElement('button');btnSave.innerHTML=ICONS.save;btnSave.title='Salva';btnSave.onclick=()=>{const sect=wrap.parentElement.querySelector(`.airport-section[data-block-idx="${blockIdx}"]`);m.airportBlocks[blockIdx].rows.forEach((r,i)=>{const inputEl=sect.querySelector(`[data-ap-input="${i}"]`);if(inputEl){let v=inputEl.value;if(inputEl.type==='date'&&v){const[y,m,d]=v.split('-');v=`${d}/${m}/${y}`}r.value=v}r.editing=false;r.saved=true});save();render();showToast('Blocco salvato.')};wrap.appendChild(btnSave);const btnDel=document.createElement('button');btnDel.innerHTML=ICONS.cancel;btnDel.title='Cancella';btnDel.onclick=()=>{if(confirm('Cancellare blocco?')){AppState.missions[missionIdx].airportBlocks.splice(blockIdx,1);save();render();showToast('Blocco eliminato.')}};wrap.appendChild(btnDel)}
+        if (m.isCancelled) { wrap.querySelectorAll('button').forEach(b => b.disabled = true); }
+        return wrap;
+    }
+    
+    function renderAirportFieldsRow(m,missionIdx,blockIdx){
+        const section=document.createElement('div');
+        section.className='airport-section';
+        section.dataset.blockIdx=blockIdx;
+        const blockDate=m.airportBlocks[blockIdx].rows[1]?.value||'';
+        airports.forEach((label,i)=>{
+            const r=m.airportBlocks[blockIdx].rows[i];
+            const v=r.value||'';
+            const phClass = m.isCancelled ? 'bg-red' : getColorClass(airportColorMap,i,v);
+            const ph=document.createElement('div');
+            ph.className=`cell airport-row ${phClass}`;
+            ph.dataset.ap=i;
+            if(r.editing && !m.isCancelled){
+                let el;
+                if(i===1){el=document.createElement('input');el.type='date';el.placeholder='gg/mm/aaaa';if(v){const[d,m,y]=v.split('/');el.value=`${y}-${m}-${d}`}}
+                else if(airportDropdowns[i]){el=document.createElement('select');airportDropdowns[i].forEach(opt=>el.add(new Option(opt,opt)));el.value=v;el.onchange=()=>{ph.className=`cell airport-row`;ph.classList.add(m.isCancelled ? 'bg-red' : getColorClass(airportColorMap,i,el.value))}}
+                else{el=document.createElement('input');el.type='text';el.value=v}
+                el.dataset.apInput=i; el.oninput=e=>{r.value=e.target.value}; ph.appendChild(el)
+            } else {
+                const contentWrap=document.createElement('div');
+                contentWrap.className='cell-content';
+                const textValue=i===1?fmt(v):v;
+                const commentIcon=getCommentIcon(m,{field:label,blockIndex:blockIdx});
+                let proximityIcon = '';
+                if (!m.isCancelled && ( (i === 2 && v !== 'Ricevuta' && v !== 'N/A') || (i === 5 && v !== 'Ricevuta' && v !== 'N/A') || (i === 7 && v !== 'Inviata'   && v !== 'N/A') )) { proximityIcon = getProximityWarning(blockDate); }
+                contentWrap.innerHTML=`<span>${textValue}</span><div>${commentIcon} ${proximityIcon}</div>`;
+                ph.appendChild(contentWrap)
+            }
+            const addBtn=document.createElement('span');
+            addBtn.className='add-comment-btn';
+            addBtn.innerHTML=ICONS.addComment;
+            if(!m.isCancelled) addBtn.onclick=(e)=>{e.stopPropagation();openCommentsModal(missionIdx,{field:label,blockIndex:blockIdx})};
+            ph.appendChild(addBtn);
+            section.appendChild(ph)
+        });
+        return section
+    }
+
+    function handleDragStart(e){if(e.currentTarget.getAttribute('draggable')==='false'){e.preventDefault();return}AppState.draggedItem=e.currentTarget;e.dataTransfer.effectAllowed='move';setTimeout(()=>e.currentTarget.classList.add('dragging'),0)}
+    function handleDragEnd(e){e.currentTarget.classList.remove('dragging');document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'))}
+    function handleDragOver(e){e.preventDefault();const target=e.currentTarget;if(target.getAttribute('draggable')==='false'){return}if(target!==AppState.draggedItem)target.classList.add('drag-over')}
+    function handleDrop(e){e.preventDefault();const target=e.currentTarget;if(target.getAttribute('draggable')==='false'){return}target.classList.remove('drag-over');if(target!==AppState.draggedItem){const missionIdx=parseInt(AppState.draggedItem.dataset.missionIdx);const fromIndex=parseInt(AppState.draggedItem.dataset.blockIdx);const toIndex=parseInt(target.dataset.blockIdx);const mission=AppState.missions[missionIdx];const item=mission.airportBlocks.splice(fromIndex,1)[0];mission.airportBlocks.splice(toIndex,0,item);save();render();showToast('Ordine blocchi aggiornato.')}}
+    function startEdit(idx){if(AppState.editingMissionId!==null)return;AppState.editingMissionId=idx;render()}
+    function cancelMainEdit(){AppState.editingMissionId=null;render()}
+    
+    function saveMainEdit(idx){
+        const card=document.querySelector(`.mission[data-i="${idx}"]`);
+        const inputs=[...card.querySelectorAll('[data-main-input]')];
+        inputs.forEach(input=>{
+            const j=input.dataset.mainInput;
+            let v=input.value;
+            // BUGFIX: Converte la data dal formato AAAA-MM-GG al formato GG/MM/AAAA
+            if(j === '3' && v){
+                const [y, m, d] = v.split('-');
+                v = `${d}/${m}/${y}`;
+            }
+            AppState.missions[idx]['f'+j]=v;
+        });
+        AppState.editingMissionId=null;
+        sortMissionsChronologically();
+        save();
+        render();
+        showToast('Modifiche salvate.');
+    }
+    
+    function renderPostItTasks() {
+        const listEl = document.getElementById('post-it-list');
+        listEl.innerHTML = '';
+        (AppState.postItTasks || []).sort((a,b) => (a.status > b.status) ? 1 : (a.status < b.status) ? -1 : 0) // pending first
+        .forEach(task => listEl.appendChild(createPostItLi(task)));
+    }
+
+    function createPostItLi(task) {
+        const li = document.createElement('li');
+        li.className = `post-it-item ${task.status === 'completed' ? 'completed' : ''}`;
+        li.dataset.id = task.id;
+        const reminderText = task.reminderDateTime ? `<div class="post-it-reminder">Promemoria: ${fmtDateTime(task.reminderDateTime)}</div>` : '';
+        li.innerHTML = `<div class="post-it-header"><span class="post-it-text">${task.text}</span></div>${reminderText}<div class="post-it-controls"><button class="complete-btn" onclick="togglePostItComplete(${task.id})">${task.status === 'pending' ? '✓' : 'Ripristina'}</button><button onclick="editPostIt(${task.id})">Modifica</button><button onclick="deletePostIt(${task.id})">Elimina</button></div>`;
+        return li;
+    }
+    
+    function addOrUpdatePostIt(e) {
+        e.preventDefault();
+        const textInput = document.getElementById('post-it-text-input');
+        const reminderInput = document.getElementById('post-it-reminder-input');
+        const text = textInput.value.trim();
+        if (!text) return;
+        if (!AppState.postItTasks) AppState.postItTasks = [];
+
+        if (AppState.editingPostItId) {
+            const task = AppState.postItTasks.find(t => t.id == AppState.editingPostItId);
+            if (task) {
+                task.text = text;
+                task.reminderDateTime = reminderInput.value || null;
+            }
+            AppState.editingPostItId = null;
+            document.querySelector('#add-post-it-form button[type="submit"]').textContent = "Aggiungi Task";
+        } else {
+            const newTask = { id: Date.now(), text: text, reminderDateTime: reminderInput.value || null, status: 'pending' };
+            AppState.postItTasks.unshift(newTask);
+        }
+        textInput.value = ''; reminderInput.value = '';
+        save();
+        renderPostItTasks();
+    }
+    
+    function editPostIt(id) {
+        const task = AppState.postItTasks.find(t => t.id == id);
+        if(!task) return;
+        document.getElementById('post-it-text-input').value = task.text;
+        document.getElementById('post-it-reminder-input').value = task.reminderDateTime || '';
+        AppState.editingPostItId = id;
+        document.querySelector('#add-post-it-form button[type="submit"]').textContent = "Salva Modifiche";
+        document.getElementById('post-it-text-input').focus();
+    }
+
+    function deletePostIt(id) {
+        if (confirm('Sei sicuro di voler eliminare questo task?')) {
+            AppState.postItTasks = AppState.postItTasks.filter(t => t.id != id);
+            save();
+            renderPostItTasks();
+        }
+    }
+
+    function togglePostItComplete(id) {
+        const task = AppState.postItTasks.find(t => t.id == id);
+        if (task) {
+            task.status = task.status === 'pending' ? 'completed' : 'pending';
+            save();
+            renderPostItTasks();
+        }
+    }
+    
+    function checkReminders() {
+        if (AppState.activeReminderTaskId !== null) return;
+        const pendingTasks = (AppState.postItTasks || []).filter(t => t.status === 'pending' && t.reminderDateTime);
+        const now = new Date();
+        for (const task of pendingTasks) {
+            const reminderTime = new Date(task.reminderDateTime);
+            if (now >= reminderTime) { showReminderModal(task); break; }
+        }
+    }
+
+    function showReminderModal(task) { AppState.activeReminderTaskId = task.id; document.getElementById('reminder-modal-text').textContent = task.text; document.getElementById('reminder-modal-overlay').classList.remove('hidden'); }
+    function closeReminderModal() { AppState.activeReminderTaskId = null; document.getElementById('reminder-modal-overlay').classList.add('hidden'); }
+    function completeFromReminder() { togglePostItComplete(AppState.activeReminderTaskId); closeReminderModal(); }
+    
+    function toLocalISOString(date) { const pad = (num) => num.toString().padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }
+
+    function snoozeFromReminder() {
+        const task = AppState.postItTasks.find(t => t.id == AppState.activeReminderTaskId);
+        if (task) {
+            const snoozeMinutes = parseInt(document.getElementById('reminder-snooze-select').value, 10);
+            const newReminderTime = new Date(Date.now() + snoozeMinutes * 60 * 1000);
+            task.reminderDateTime = toLocalISOString(newReminderTime);
+            save();
+            renderPostItTasks();
+            showToast(`Task rimandato di ${snoozeMinutes} minuti.`);
+        }
+        closeReminderModal();
+    }
+
+    function renderTicker() {
+        const container = document.getElementById('news-ticker-container');
+        const textEl = document.getElementById('news-ticker-text');
+        const toggleBtn = document.getElementById('toggleTickerBtn');
+        if (!AppState.ticker) return;
+        if (AppState.ticker.enabled) {
+            container.classList.remove('hidden'); document.body.classList.add('ticker-active');
+            textEl.textContent = AppState.ticker.text;
+            toggleBtn.textContent = 'Disabilita Scorrimento';
+            const textWidth = textEl.offsetWidth; const containerWidth = container.offsetWidth;
+            const totalDistance = textWidth + containerWidth; const scrollSpeed = 75;
+            const duration = totalDistance / scrollSpeed;
+            textEl.style.animationDuration = `${duration}s`;
+        } else {
+            container.classList.add('hidden'); document.body.classList.remove('ticker-active');
+            toggleBtn.textContent = 'Abilita Scorrimento';
+        }
+    }
+
+    function initApp(){
+        document.getElementById('header-left').insertAdjacentHTML('afterbegin', `<button id="refreshBtn" class="header-button" title="Aggiorna Dati">${ICONS.refresh}</button>`);
+        document.getElementById('refreshBtn').onclick = () => loadDataFromGoogle(true);
+        document.getElementById('exportBtn').onclick=exportPastMissions;
+        document.getElementById('backupBtn').onclick=()=>{const backupData=JSON.stringify(AppState,null,2);const blob=new Blob([backupData],{type:'application/json'});const link=document.createElement('a');const date=new Date().toISOString().slice(0,10);link.href=URL.createObjectURL(blob);link.download=`mission_planner_backup_${date}.json`;link.click();showToast('Backup creato.')};
+// Dentro la funzione initApp()
+
+document.getElementById('importBtn').onclick=()=>{
+    const fileInput=document.createElement('input');
+    fileInput.type='file';
+    fileInput.accept='.json';
+    fileInput.onchange=e=>{
+        const file=e.target.files[0];
+        if(!file)return;
+        if(!confirm("Sei sicuro? L'importazione SOSTITUIRA' tutti i dati attuali e li salverà su Google Sheets.")){return}
+        const reader=new FileReader();
+        reader.onload=e=>{
+            try{
+                const importedData = JSON.parse(e.target.result);
+
+                // --- INIZIO NUOVA LOGICA DI NORMALIZZAZIONE ---
+
+                // 1. Normalizza le date nelle missioni principali
+                if (importedData.missions && Array.isArray(importedData.missions)) {
+                    importedData.missions.forEach(mission => {
+                        if (mission.f3 && mission.f3.includes('-')) { // Se trova un formato AAAA-MM-GG
+                            const [y, m, d] = mission.f3.split('-');
+                            mission.f3 = `${d}/${m}/${y}`;
+                        }
+                        // 2. Normalizza le date nei blocchi aeroporto
+                        if (mission.airportBlocks && Array.isArray(mission.airportBlocks)) {
+                            mission.airportBlocks.forEach(block => {
+                                if(block.rows && block.rows[1] && block.rows[1].value && block.rows[1].value.includes('-')) {
+                                    const [y, m, d] = block.rows[1].value.split('-');
+                                    block.rows[1].value = `${d}/${m}/${y}`;
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                // --- FINE NUOVA LOGICA DI NORMALIZZAZIONE ---
+
+                // 3. Ora che i dati sono puliti, aggiorna lo stato e salva
+                Object.assign(AppState, importedData);
+                save(); // Salva i dati normalizzati su Google Sheets
+                fullRender(); // Ridisegna l'interfaccia
+                showToast('Backup ripristinato e salvato online.');
+
+            } catch(err){
+                console.error("Errore durante l'importazione:", err);
+                alert('File di backup non valido o corrotto.');
+            }
+        };
+        reader.readAsText(file);
+    };
+    fileInput.click()
+};
+        
+        document.getElementById('cleanBtn').onclick=cleanPastMissions;
+        document.getElementById('notesBtn').onclick=()=>{document.getElementById('notes-overlay').classList.remove('hidden');renderNotes()};
+        document.getElementById('gotoNextBtn').innerHTML=ICONS.goto;
+        document.getElementById('gotoNextBtn').onclick=gotoNextMission;
+        document.getElementById('searchInput').oninput=e=>{AppState.searchFilter=e.target.value.toLowerCase();render();};
+        document.getElementById('close-modal-btn').innerHTML=ICONS.close;
+        document.getElementById('close-modal-btn').onclick=()=>document.getElementById('notes-overlay').classList.add('hidden');
+        document.getElementById('close-icao-modal-btn').innerHTML=ICONS.close;
+        document.getElementById('close-icao-modal-btn').onclick=()=>document.getElementById('icao-modal-overlay').classList.add('hidden');
+        document.getElementById('add-list-btn').onclick=addList; document.getElementById('list-input').onkeyup=e=>{if(e.key==='Enter')addList()};
+        document.getElementById('add-note-btn').onclick=addNote; document.getElementById('note-input').onkeyup=e=>{if(e.key==='Enter')addNote()};
+        document.getElementById('notes-overlay').onclick=e=>{if(e.target.id==='notes-overlay')document.getElementById('notes-overlay').classList.add('hidden')};
+        document.getElementById('icao-modal-overlay').onclick=e=>{if(e.target.id==='icao-modal-overlay')document.getElementById('icao-modal-overlay').classList.add('hidden')};
+        
+        document.getElementById('close-comments-modal-btn').innerHTML=ICONS.close;
+        document.getElementById('close-comments-modal-btn').onclick = () => { document.getElementById('comments-modal-overlay').classList.add('hidden'); document.getElementById('add-comment-form').classList.remove('hidden'); AppState.editingCommentId = null; };
+        document.getElementById('add-comment-form').onsubmit = addComment;
+        document.getElementById('close-destination-notes-btn').innerHTML = ICONS.close;
+        document.getElementById('close-destination-notes-btn').onclick = () => document.getElementById('destination-notes-modal-overlay').classList.add('hidden');
+        document.getElementById('destination-notes-modal-overlay').onclick=e=>{if(e.target.id==='destination-notes-modal-overlay')document.getElementById('destination-notes-modal-overlay').classList.add('hidden')};
+        const ipadBtn = document.getElementById('ipad-check-btn'); ipadBtn.innerHTML = ICONS.ipadCheck + '<span>iPad Pronti</span>'; ipadBtn.onclick = toggleIPadCheck;
+
+        document.getElementById('add-post-it-form').onsubmit = addOrUpdatePostIt;
+        document.getElementById('reminder-complete-btn').onclick = completeFromReminder;
+        document.getElementById('reminder-snooze-btn').onclick = snoozeFromReminder;
+        document.getElementById('reminder-close-btn').onclick = closeReminderModal;
+        
+        document.getElementById('toggleTickerBtn').onclick = () => { AppState.ticker.enabled = !AppState.ticker.enabled; save(); renderTicker(); };
+        document.getElementById('editTickerBtn').onclick = () => { const newText = prompt('Inserisci il nuovo messaggio per la barra di scorrimento:', AppState.ticker.text); if (newText !== null) { AppState.ticker.text = newText; save(); renderTicker(); } };
+        window.addEventListener('resize', renderTicker);
+        
+        setInterval(updateClock,1000); updateClock();
+        
+        const inputRows=document.getElementById('inputRows');fields.forEach((name,i)=>{const row=document.createElement('div');row.className='cell';row.style.display='flex';row.innerHTML=`<span class="row-label-container"><span>${name}</span>${i===5?`<button id="manage-icao-btn">${ICONS.settings}</button>`:''}</span>`;const cont=document.createElement('div');cont.className='row-input';row.appendChild(cont);let el;if(i===5){el=document.createElement('input');el.setAttribute('list','icao-list');const datalist=document.createElement('datalist');datalist.id='icao-list';row.appendChild(datalist)}else if(i===3){el=document.createElement('input');el.type='date';el.placeholder='gg/mm/aaaa';}else if(dropdowns[i]){el=document.createElement('select');dropdowns[i].forEach(v=>el.add(new Option(v,v))); row.classList.add('bg-blue'); el.onchange=()=>{ row.className = 'cell'; row.style.display='flex'; if (colorMap[i]) { if (el.value === '' || el.value === 'N/A') { row.classList.add('bg-blue'); } else { row.classList.add(getColorClass(colorMap, i, el.value)); } } else { row.classList.add('bg-blue'); } } }else{el=document.createElement('input');el.type='text'}el.id='in'+i;cont.appendChild(el);inputRows.appendChild(row)});
+        
+        const meatInput = document.getElementById('in11'); meatInput.value = "Red"; const meatCell = meatInput.closest('.cell'); meatCell.classList.remove('bg-blue'); meatCell.classList.add(getColorClass(colorMap, 11, "Red")); 
+        const resiaInput = document.getElementById('in12'); resiaInput.value = "Da fare"; const resiaCell = resiaInput.closest('.cell'); resiaCell.classList.remove('bg-blue'); resiaCell.classList.add(getColorClass(colorMap, 12, "Da fare"));
+        document.getElementById('manage-icao-btn').onclick=openIcaoModal;
+        
+        document.getElementById('saveBtn').onclick=()=>{const getVal=i=>document.getElementById('in'+i).value;if(!getVal(0)||!getVal(3)){alert('Compila almeno "Mix EATC n°" e "Data".');return}const newIcao=getVal(5).toUpperCase().trim();if(newIcao&&!AppState.icaoCodes.includes(newIcao)){if(!AppState.icaoCodes) AppState.icaoCodes = []; AppState.icaoCodes.push(newIcao);renderIcaoDatalist()}const o={id:Date.now()};fields.forEach((_,i)=>{let v=getVal(i);if(i===3&&v){const[y,m,d]=v.split('-');v=`${d}/${m}/${y}`}o['f'+i]=v});o.airportBlocks=[];o.comments=[];o.isCancelled=false;AppState.missions.push(o);sortMissionsChronologically();save();render();
+            const resetForm=()=>{
+                fields.forEach((_,i)=>{
+                    const input = document.getElementById('in'+i); input.value = ''; const cell = input.closest('.cell'); cell.className = 'cell'; cell.style.display = 'flex';
+                    if (dropdowns[i]) { cell.classList.add('bg-blue'); }
+                    if (i === 11) { input.value = "Red"; cell.classList.remove('bg-blue'); cell.classList.add(getColorClass(colorMap, 11, "Red")); }
+                    if (i === 12) { input.value = "Da fare"; cell.classList.remove('bg-blue'); cell.classList.add(getColorClass(colorMap, 12, "Da fare")); }
+                });
+            };
+            resetForm();showToast('Missione creata.')
+        };
+        
+        // Avvio dell'applicazione
+        loadDataFromGoogle(true); // Caricamento iniziale forzato
+        setInterval(checkForUpdates, 30000); // Polling per aggiornamenti ogni 30 secondi
+        setInterval(checkReminders, 15000); // Controllo promemoria
+    }
+
+    // Avvia l'app quando il DOM è pronto
+    document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>
